@@ -1,0 +1,674 @@
+
+# **Intro to Predictive Modeling Exercise 1- Anuraag Mohile**
+
+## Probability Practice
+### Part A.
+Let Y->Yes, T->Truthful Clicker, R->Random Clicker
+
+P(T)= 0.7, P(R)=0.3, P(Y|R)=0.5, P(Y)=0.65
+
+
+According to the rule of total probability,
+
+P(Y)=P(Y|T).P(T) + P(Y|R).P(R)
+
+0.65=P(Y|T).0.7 + 0.5.0.3
+
+P(Y|T)=5/7
+
+
+### Part B.
+Let, A-> Test is positive, B-> Has disease
+
+P(A|B)=0.993
+
+P(not A| not B)=0.9999 <=> P(A|not B)=0.0001
+
+P(B)=0.000025 <=> P(not B)=0.999975
+
+
+According to the rule of total probability,
+
+P(A)=P(A|B).P(B) + P(A|not B).P(not B)
+
+P(A)=0.993.0.000025 + 0.0001.0.999975
+
+P(A)=0.000124822
+
+According to Baye's Theorem,
+
+P(B|A)=P(A|B).P(B)/P(A)
+
+P(B|A)=0.993.0.000025/0.000124822
+
+P(B|A)=0.19888 ~ 20%
+
+
+Thus, the test would be wrong 80% of the time when the result is positive.
+
+
+## Exploratory analysis: green buildings
+
+Let us first split the dataset into subsets of green-rated and not green-rated
+```{r,echo=FALSE,message=FALSE,warning=FALSE,comment=""}
+g=read.csv("greenbuildings.csv")
+green=g[g$green_rating==1,]
+no_green=g[g$green_rating==0,]
+```
+Now, let's see the ages for each
+
+
+
+
+```{r,echo=FALSE,message=FALSE,warning=FALSE,comment=""}
+plot(green$age)
+```
+
+
+
+
+Median age for green-rated buildings:
+```{r,echo=FALSE,message=FALSE,warning=FALSE,comment=""}
+median(green$age)
+```
+```{r,echo=FALSE,message=FALSE,warning=FALSE,comment=""}
+plot(no_green$age)
+```
+
+
+
+
+Median age for normal buildings:
+```{r,echo=FALSE,message=FALSE,warning=FALSE,comment=""}
+median(no_green$age)
+```
+We see that green-rated buildings tend to be newer.
+Now, let's see the relationship between age and rent
+```{r,echo=FALSE,message=FALSE,warning=FALSE,comment=""}
+f=g[g$Rent<75,]
+plot(f$age,f$Rent)
+```
+
+
+
+
+
+
+We see that newer buildings tend to have higher rents. Exploring this further:
+
+Median rent for houses below 30 years old:
+```{r,echo=FALSE,message=FALSE,warning=FALSE,comment=""}
+median(g[g$age<30,]$Rent)
+```
+Median rent for houses above 30 years old:
+```{r,echo=FALSE,message=FALSE,warning=FALSE,comment=""}
+median(g[g$age>30,]$Rent)
+```
+Thus, the difference in rents that the Excel guru got, could be explained by the age of the buildings, among other "behind-the-scenes" variables. 
+The "stats guru"" forgot that correlation doesn't mean causation.
+We need to look at more variables which could be correlated with green-rating, and could be responsible for the rent difference, before drawing conclusions about whether building a green-rated building is viable or not. If other variables are controlled, we can get a clearer idea on that matter.
+
+
+## **Bootstrapping**
+```{r,echo=FALSE,message=FALSE,warning=FALSE,comment=""}
+set.seed(7)
+library(mosaic)
+library(quantmod)
+library(foreach)
+```
+### One Asset at a time
+#### Only TLT in portfolio
+```{r,echo=FALSE,message=FALSE,warning=FALSE,comment=""}
+#One at a time
+#TLT
+set.seed(7)
+mystocks = c("TLT")
+myprices = getSymbols(mystocks, from = "2007-01-01")
+
+
+# A chunk of code for adjusting all stocks
+# creates a new object addind 'a' to the end
+for(ticker in mystocks) {
+    expr = paste0(ticker, "a = adjustOHLC(", ticker, ")")
+    eval(parse(text=expr))
+}
+
+
+
+# Combine all the returns in a matrix
+all_returns = cbind(ClCl(TLTa))
+all_returns = as.matrix(na.omit(all_returns))
+
+
+# simulate many different possible scenarios  
+initial_wealth = 100000
+sim1 = foreach(i=1:5000, .combine='rbind') %do% {
+    total_wealth = initial_wealth
+    weights = c(1)
+    holdings = weights * total_wealth
+    n_days = 20
+    wealthtracker = rep(0, n_days)
+    for(today in 1:n_days) {
+        return.today = resample(all_returns, 1, orig.ids=FALSE)
+        holdings = holdings + holdings*return.today
+        total_wealth = sum(holdings)
+        wealthtracker[today] = total_wealth
+    }
+    wealthtracker
+}
+```
+Total wealth if only TLT in portfolio
+```{r,echo=FALSE,message=FALSE,warning=FALSE,comment=""}
+# Profit/loss
+mean(sim1[,n_days])
+```
+5% VAR if only TLT in portfolio
+```{r,echo=FALSE,message=FALSE,warning=FALSE,comment=""}
+# Calculate 5% value at risk
+quantile(sim1[,n_days], 0.05) - initial_wealth
+```
+#### Only SPY in portfolio
+```{r,echo=FALSE,message=FALSE,warning=FALSE,comment=""}
+#One at a time
+#SPY
+set.seed(7)
+mystocks = c("SPY")
+myprices = getSymbols(mystocks, from = "2007-01-01")
+
+
+# A chunk of code for adjusting all stocks
+# creates a new object addind 'a' to the end
+
+for(ticker in mystocks) {
+    expr = paste0(ticker, "a = adjustOHLC(", ticker, ")")
+    eval(parse(text=expr))
+}
+
+
+
+# Combine all the returns in a matrix
+all_returns = cbind(ClCl(SPYa))
+all_returns = as.matrix(na.omit(all_returns))
+
+
+# simulate many different possible scenarios  
+initial_wealth = 100000
+sim1 = foreach(i=1:5000, .combine='rbind') %do% {
+    total_wealth = initial_wealth
+    weights = c(1)
+    holdings = weights * total_wealth
+    n_days = 20
+    wealthtracker = rep(0, n_days)
+    for(today in 1:n_days) {
+        return.today = resample(all_returns, 1, orig.ids=FALSE)
+        holdings = holdings + holdings*return.today
+        total_wealth = sum(holdings)
+        wealthtracker[today] = total_wealth
+    }
+    wealthtracker
+}
+```
+Total wealth if only SPY in portfolio
+```{r,echo=FALSE,message=FALSE,warning=FALSE,comment=""}
+# Profit/loss
+mean(sim1[,n_days])
+```
+5% VAR if only SPY in portfolio
+```{r,echo=FALSE,message=FALSE,warning=FALSE,comment=""}
+# Calculate 5% value at risk
+quantile(sim1[,n_days], 0.05) - initial_wealth
+```
+#### Only LQD in portfolio
+```{r,echo=FALSE,message=FALSE,warning=FALSE,comment=""}
+#One at a time
+#LQD
+set.seed(7)
+mystocks = c("LQD")
+myprices = getSymbols(mystocks, from = "2007-01-01")
+
+
+# A chunk of code for adjusting all stocks
+# creates a new object addind 'a' to the end
+
+for(ticker in mystocks) {
+    expr = paste0(ticker, "a = adjustOHLC(", ticker, ")")
+    eval(parse(text=expr))
+}
+
+
+
+# Combine all the returns in a matrix
+all_returns = cbind(ClCl(LQDa))
+all_returns = as.matrix(na.omit(all_returns))
+
+
+# simulate many different possible scenarios  
+initial_wealth = 100000
+sim1 = foreach(i=1:5000, .combine='rbind') %do% {
+    total_wealth = initial_wealth
+    weights = c(1)
+    holdings = weights * total_wealth
+    n_days = 20
+    wealthtracker = rep(0, n_days)
+    for(today in 1:n_days) {
+        return.today = resample(all_returns, 1, orig.ids=FALSE)
+        holdings = holdings + holdings*return.today
+        total_wealth = sum(holdings)
+        wealthtracker[today] = total_wealth
+    }
+    wealthtracker
+}
+```
+Total wealth if only LQD in portfolio
+```{r,echo=FALSE,message=FALSE,warning=FALSE,comment=""}
+# Profit/loss
+mean(sim1[,n_days])
+```
+5% VAR if only LQD in portfolio
+```{r,echo=FALSE,message=FALSE,warning=FALSE,comment=""}
+# Calculate 5% value at risk
+quantile(sim1[,n_days], 0.05) - initial_wealth
+```
+#### Only EEM in portfolio
+```{r,echo=FALSE,message=FALSE,warning=FALSE,comment=""}
+#One at a time
+#EEM
+set.seed(7)
+mystocks = c("EEM")
+myprices = getSymbols(mystocks, from = "2007-01-01")
+
+
+# A chunk of code for adjusting all stocks
+# creates a new object addind 'a' to the end
+
+for(ticker in mystocks) {
+    expr = paste0(ticker, "a = adjustOHLC(", ticker, ")")
+    eval(parse(text=expr))
+}
+
+
+
+# Combine all the returns in a matrix
+all_returns = cbind(ClCl(EEMa))
+all_returns = as.matrix(na.omit(all_returns))
+
+
+# simulate many different possible scenarios  
+initial_wealth = 100000
+sim1 = foreach(i=1:5000, .combine='rbind') %do% {
+    total_wealth = initial_wealth
+    weights = c(1)
+    holdings = weights * total_wealth
+    n_days = 20
+    wealthtracker = rep(0, n_days)
+    for(today in 1:n_days) {
+        return.today = resample(all_returns, 1, orig.ids=FALSE)
+        holdings = holdings + holdings*return.today
+        total_wealth = sum(holdings)
+        wealthtracker[today] = total_wealth
+    }
+    wealthtracker
+}
+```
+Total wealth if only EEM in portfolio
+```{r,echo=FALSE,message=FALSE,warning=FALSE,comment=""}
+# Profit/loss
+mean(sim1[,n_days])
+```
+5% VAR if only EEM in portfolio
+```{r,echo=FALSE,message=FALSE,warning=FALSE,comment=""}
+# Calculate 5% value at risk
+quantile(sim1[,n_days], 0.05) - initial_wealth
+```
+#### Only VNQ in portfolio
+```{r,echo=FALSE,message=FALSE,warning=FALSE,comment=""}
+#One at a time
+#VNQ
+set.seed(7)
+mystocks = c("VNQ")
+myprices = getSymbols(mystocks, from = "2007-01-01")
+
+
+# A chunk of code for adjusting all stocks
+# creates a new object addind 'a' to the end
+
+for(ticker in mystocks) {
+    expr = paste0(ticker, "a = adjustOHLC(", ticker, ")")
+    eval(parse(text=expr))
+}
+
+
+
+# Combine all the returns in a matrix
+all_returns = cbind(ClCl(VNQa))
+all_returns = as.matrix(na.omit(all_returns))
+
+
+# simulate many different possible scenarios  
+initial_wealth = 100000
+sim1 = foreach(i=1:5000, .combine='rbind') %do% {
+    total_wealth = initial_wealth
+    weights = c(1)
+    holdings = weights * total_wealth
+    n_days = 20
+    wealthtracker = rep(0, n_days)
+    for(today in 1:n_days) {
+        return.today = resample(all_returns, 1, orig.ids=FALSE)
+        holdings = holdings + holdings*return.today
+        total_wealth = sum(holdings)
+        wealthtracker[today] = total_wealth
+    }
+    wealthtracker
+}
+```
+Total wealth if only VNQ in portfolio
+```{r,echo=FALSE,message=FALSE,warning=FALSE,comment=""}
+# Profit/loss
+mean(sim1[,n_days])
+```
+5% VAR if only VNQ in portfolio
+```{r,echo=FALSE,message=FALSE,warning=FALSE,comment=""}
+# Calculate 5% value at risk
+quantile(sim1[,n_days], 0.05) - initial_wealth
+```
+We see that LQD has lowest risk but also gives lowest profit; TLT has double the risk but not much more profit than LQD; SPY is riskier than both of them, but has higher profits; EEM has considerably higher profits and not too high a risk considering the profits, but it is higher than even SPY; VNQ seems to be the worst since, the profit is only marginally higher than SPY but risk is almost double, and highest out of the lot.
+
+
+### *Even Split Portfolio*
+```{r,echo=FALSE,message=FALSE,warning=FALSE,comment=""}
+#Import a few stocks
+
+mystocks = c("TLT", "LQD", "SPY", "VNQ", "EEM")
+getSymbols(mystocks)
+
+
+#Adjust for splits and dividends
+
+TLTa = adjustOHLC(TLT)
+LQDa = adjustOHLC(LQD)
+SPYa = adjustOHLC(SPY)
+VNQa = adjustOHLC(VNQ)
+EEMa = adjustOHLC(EEM)
+
+
+#Combine close to close changes in a single matrix
+
+all_returns = cbind(ClCl(TLTa),ClCl(LQDa),ClCl(SPYa),ClCl(VNQa),ClCl(EEMa))
+all_returns = as.matrix(na.omit(all_returns))
+
+```
+Correlation matrix for the 5 assets
+```{r,echo=FALSE,message=FALSE,warning=FALSE,comment=""}
+#The sample correlation matrix
+
+cor(all_returns)
+
+
+
+#### Now use a bootstrap approach
+set.seed(7)
+
+mystocks = c("SPY", "TLT", "LQD", "VNQ", "EEM")
+myprices = getSymbols(mystocks, from = "2007-01-01")
+
+
+# A chunk of code for adjusting all stocks
+# creates a new object addind a to the end
+for(ticker in mystocks) {
+	expr = paste0(ticker, "a = adjustOHLC(", ticker, ")")
+	eval(parse(text=expr))
+}
+
+
+# Combine all the returns in a matrix
+all_returns = cbind(	ClCl(SPYa),
+								ClCl(TLTa),
+								ClCl(LQDa),
+								ClCl(VNQa),
+								ClCl(EEMa))
+
+all_returns = as.matrix(na.omit(all_returns))
+
+# Now simulate many different possible scenarios  
+initial_wealth = 100000
+sim1 = foreach(i=1:5000, .combine='rbind') %do% {
+	total_wealth = initial_wealth
+	weights = c(0.2, 0.2, 0.2, 0.2, 0.2)
+	holdings = weights * total_wealth
+	n_days = 20
+	wealthtracker = rep(0, n_days)
+	for(today in 1:n_days) {
+		return.today = resample(all_returns, 1, orig.ids=FALSE)
+		holdings = holdings + holdings*return.today
+		total_wealth = sum(holdings)
+		wealthtracker[today] = total_wealth
+	}
+	wealthtracker
+}
+
+hist(sim1[,n_days], 25)
+```
+
+
+
+
+
+Total wealth for even split portfolio
+```{r,echo=FALSE,message=FALSE,warning=FALSE,comment=""}
+# Profit/loss
+mean(sim1[,n_days])
+hist(sim1[,n_days]- initial_wealth, breaks=30)
+```
+
+
+
+5% VAR for even split portfolio
+```{r,echo=FALSE,message=FALSE,warning=FALSE,comment=""}
+# Calculate 5% value at risk
+quantile(sim1[,n_days], 0.05) - initial_wealth
+ 
+```
+### *Safer Portfolio*
+
+To make a safer portfolio, we need to consider the assets with lower risks. Also, at least 2 assets need to be negatively correlated since, if one of them goes down, the other one shouldn't go down too because of it.
+Keeping this in mind, we see that LQD, TLT, and SPY seem to be the best. They have the lowest risks out of the 5. Also, TLT and SPY are negatively correlated.
+Allocations: 50% for LQD, 30% for SPY, 20% for TLT
+```{r,echo=FALSE,message=FALSE,warning=FALSE,comment=""}
+set.seed(7)
+mystocks = c("SPY", "TLT", "LQD")
+myprices = getSymbols(mystocks, from = "2007-01-01")
+
+
+# A chunk of code for adjusting all stocks
+# creates a new object addind a to the end
+for(ticker in mystocks) {
+	expr = paste0(ticker, "a = adjustOHLC(", ticker, ")")
+	eval(parse(text=expr))
+}
+
+
+# Combine all the returns in a matrix
+all_returns = cbind(	ClCl(SPYa),
+								ClCl(TLTa),
+								ClCl(LQDa))
+
+all_returns = as.matrix(na.omit(all_returns))
+
+# Now simulate many different possible scenarios  
+initial_wealth = 100000
+sim1 = foreach(i=1:5000, .combine='rbind') %do% {
+	total_wealth = initial_wealth
+	weights = c(0.3,0.2,0.5)
+	holdings = weights * total_wealth
+	n_days = 20
+	wealthtracker = rep(0, n_days)
+	for(today in 1:n_days) {
+		return.today = resample(all_returns, 1, orig.ids=FALSE)
+		holdings = holdings + holdings*return.today
+		total_wealth = sum(holdings)
+		wealthtracker[today] = total_wealth
+	}
+	wealthtracker
+}
+
+hist(sim1[,n_days], 25)
+```
+
+
+
+
+
+Total wealth for safer portfolio
+```{r,echo=FALSE,message=FALSE,warning=FALSE,comment=""}
+# Profit/loss
+mean(sim1[,n_days])
+hist(sim1[,n_days]- initial_wealth, breaks=30)
+```
+
+
+
+5% VAR for safer portfolio
+```{r,echo=FALSE,message=FALSE,warning=FALSE,comment=""}
+# Calculate 5% value at risk
+quantile(sim1[,n_days], 0.05) - initial_wealth
+ 
+```
+### *Aggressive Portfolio*
+
+EEM has highest profit along with a high risk. It has the best Profit to Risk ratio. So adding another asset which lowers the risk while not decreasing the profit too much is what's required. TLT works best since, it is the only one negatively correlated with EEM.
+Allocation: 60% to EEM; 40% to TLT
+```{r,echo=FALSE,message=FALSE,warning=FALSE,comment=""}
+set.seed(7)
+mystocks = c("EEM", "TLT")
+myprices = getSymbols(mystocks, from = "2007-01-01")
+
+
+# A chunk of code for adjusting all stocks
+# creates a new object addind a to the end
+for(ticker in mystocks) {
+	expr = paste0(ticker, "a = adjustOHLC(", ticker, ")")
+	eval(parse(text=expr))
+}
+
+
+# Combine all the returns in a matrix
+all_returns = cbind(
+								ClCl(EEMa),ClCl(TLTa))
+
+all_returns = as.matrix(na.omit(all_returns))
+
+# Now simulate many different possible scenarios  
+initial_wealth = 100000
+sim1 = foreach(i=1:5000, .combine='rbind') %do% {
+	total_wealth = initial_wealth
+	weights = c(0.6,0.4)
+	holdings = weights * total_wealth
+	n_days = 20
+	wealthtracker = rep(0, n_days)
+	for(today in 1:n_days) {
+		return.today = resample(all_returns, 1, orig.ids=FALSE)
+		holdings = holdings + holdings*return.today
+		total_wealth = sum(holdings)
+		wealthtracker[today] = total_wealth
+	}
+	wealthtracker
+}
+
+hist(sim1[,n_days], 25)
+```
+
+
+
+
+
+Total wealth for aggressive portfolio
+```{r,echo=FALSE,message=FALSE,warning=FALSE,comment=""}
+# Profit/loss
+mean(sim1[,n_days])
+hist(sim1[,n_days]- initial_wealth, breaks=30)
+```
+
+
+
+
+
+5% VAR for aggressive portfolio
+```{r,echo=FALSE,message=FALSE,warning=FALSE,comment=""}
+# Calculate 5% value at risk
+quantile(sim1[,n_days], 0.05) - initial_wealth
+ 
+```
+
+## Market Segmentation
+
+Using PCA:
+
+```{r,echo=FALSE,message=FALSE,warning=FALSE,comment=""}
+library(ggplot2)
+
+set.seed(7)
+
+interest_data = read.csv("social_marketing.csv", row.names=1)
+
+# First normalize phrase counts to phrase frequencies.
+Z = interest_data/rowSums(interest_data)
+
+# PCA
+pc2 = prcomp(Z, scale=TRUE, rank=2)
+loadings = pc2$rotation
+scores = pc2$x
+
+# Question 1: where do the observations land in PC space?
+# a biplot shows the first two PCs
+qplot(scores[,1], scores[,2], xlab='Component 1', ylab='Component 2')
+```
+
+
+
+We see that most of the observations are very closely clustered around the top & top-left, while some are clustered near the bottom (Negative of second PC) and others to the right (Positive of first PC)
+
+
+The top words associated with each component:
+
+PC1:
+Positive side
+```{r,echo=FALSE,message=FALSE,warning=FALSE,comment=""}
+# Question 2: how are the individual PCs loaded on the original variables?
+o1 = order(loadings[,1], decreasing=TRUE)
+colnames(Z)[head(o1,6)]
+```
+Negative Side
+```{r,echo=FALSE,message=FALSE,warning=FALSE,comment=""}
+colnames(Z)[tail(o1,6)]
+```
+
+PC2:
+Positive side
+```{r,echo=FALSE,message=FALSE,warning=FALSE,comment=""}
+o2 = order(loadings[,2], decreasing=TRUE)
+colnames(Z)[head(o2,6)]
+```
+Negative Side
+```{r,echo=FALSE,message=FALSE,warning=FALSE,comment=""}
+colnames(Z)[tail(o2,6)]
+```
+
+Graph of variables along with their contributions represented by color
+```{r,echo=FALSE,message=FALSE,warning=FALSE,comment=""}
+library("FactoMineR")
+library("factoextra")
+fviz_pca_var(pc2, col.var="contrib",
+             gradient.cols = c("#00AFBB", "#E7B800", "#FC4E07"),
+             repel = FALSE
+             )
+```
+
+
+We can see 2 clear clusters- 
+
+1)One which includes "family",school","parenting","food","religion", etc.
+These represent more of 'familial', core values.
+
+2)Second which includes "beauty", "fashion", "personal_fitness", "health_nutrition", etc.
+These are more of self-care related interests.
+
